@@ -100,16 +100,25 @@ col[..., 1] = np.where(arc, 250 - 60 * tx, 255)
 col[..., 2] = 255
 col[..., 3] = a * 255
 dis = Image.fromarray(col.astype(np.uint8), "RGBA")
-t = gradient((10, 18, 74), (6, 62, 92))
-glow(t, W * .78, H * .15, 300, (40, 200, 220), 95)
-glow(t, W * .1, H * 1.0, 280, (60, 70, 220), 110)
+t = gradient((14, 20, 44), (6, 7, 14))
+glow(t, W * .5, H * 1.08, 320, (30, 90, 230), 135)
+glow(t, W * .82, -10, 220, (40, 200, 220), 55)
 place(t, dis, 0.60, dy=-4)
 finish(t, "disney")
 
 # ---------- Oneplay: výřez z originálního obrázku ----------
-op = Image.open(os.path.join(SRC, "oneplay.png")).convert("RGBA")
-cw, ch = 992, 558
-x0, y0 = (1200 - cw) // 2, 54
-t = op.crop((x0, y0, x0 + cw, y0 + ch)).resize((W, H), Image.LANCZOS)
+src = np.asarray(Image.open(os.path.join(SRC, "oneplay.png")).convert("RGB")).astype(np.float32)[200:430, 260:960]
+r, g, b = src[..., 0], src[..., 1], src[..., 2]
+white = np.clip((np.min(src, axis=2) - 70) / 150.0, 0, 1)
+yellow = np.clip((np.minimum(r, g * 1.25) - b - 90) / 100.0, 0, 1)
+a = np.maximum(white, yellow)
+col = np.zeros(src.shape[:2] + (4,), np.float32)
+col[..., :3] = np.where(yellow[..., None] > white[..., None], src, 255)
+col[..., 3] = a * 255
+logo = Image.fromarray(col.astype(np.uint8), "RGBA")
+t = gradient((22, 18, 52), (6, 6, 14))
+glow(t, W * .5, H * 1.1, 300, (245, 140, 60), 110)
+glow(t, W * .2, -10, 230, (90, 80, 240), 70)
+place(t, logo, 0.66)
 finish(t, "oneplay")
 print("ok")
