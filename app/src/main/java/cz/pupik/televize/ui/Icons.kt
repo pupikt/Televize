@@ -123,6 +123,11 @@ fun LineIcon(kind: String, size: Dp, color: Color = C.text) {
                 drawLine(color, Offset(s * .72f, s * .48f), Offset(s * .5f, s * .7f), s * .09f, StrokeCap.Round)
                 drawLine(color, Offset(s * .2f, s * .88f), Offset(s * .8f, s * .88f), s * .09f, StrokeCap.Round)
             }
+            "tv" -> {
+                drawRoundRect(color, Offset(s * .08f, s * .18f), Size(s * .84f, s * .56f), androidx.compose.ui.geometry.CornerRadius(s * .08f), style = st)
+                drawLine(color, Offset(s * .32f, s * .88f), Offset(s * .68f, s * .88f), s * .09f, StrokeCap.Round)
+                drawLine(color, Offset(s * .5f, s * .74f), Offset(s * .5f, s * .88f), s * .09f, StrokeCap.Round)
+            }
             "check" -> {
                 val p = Path().apply { moveTo(s * .18f, s * .52f); lineTo(s * .42f, s * .76f); lineTo(s * .84f, s * .26f) }
                 drawPath(p, color, style = st)

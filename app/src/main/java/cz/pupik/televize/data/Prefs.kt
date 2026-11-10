@@ -51,6 +51,17 @@ class Prefs(ctx: Context) {
         p.edit().putString("log", l.joinToString("\n")).apply()
     }
 
+    /** Propojení s Domácností: tajný klíč telky, kód k zadání, hotovo? */
+    var linkToken: String
+        get() = p.getString("linkToken", "")!!
+        set(v) = p.edit().putString("linkToken", v).apply()
+    var linkCode: String?
+        get() = p.getString("linkCode", null)
+        set(v) = p.edit().putString("linkCode", v).apply()
+    var linkPaired: Boolean
+        get() = p.getBoolean("linkPaired", false)
+        set(v) = p.edit().putBoolean("linkPaired", v).apply()
+
     var weatherCache: String?
         get() = p.getString("wcache", null)
         set(v) = p.edit().putString("wcache", v).apply()

@@ -14,6 +14,9 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.media.AudioManager
+import org.json.JSONArray
+import org.json.JSONObject
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -109,6 +112,7 @@ class NightService : AccessibilityService() {
         level = if (System.currentTimeMillis() - prefs.levelAt < 6 * 3600_000L) prefs.level else 1f
         addVeil()
         apply()
+        Link.start(this)
         registerReceiver(screen, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON)
         })
@@ -117,6 +121,7 @@ class NightService : AccessibilityService() {
     override fun onDestroy() {
         instance = null
         runCatching { prefs.log("služba skončila") }
+        Link.stop()
         runCatching { unregisterReceiver(screen) }
         h.removeCallbacksAndMessages(null)
         runCatching { veil?.let { wm.removeView(it) } }
@@ -261,6 +266,66 @@ class NightService : AccessibilityService() {
     }
 
     private val hideBadge = Runnable { badge?.animate()?.alpha(0f)?.setDuration(400)?.start() }
+
+    // ---------- Domácnost ----------
+    fun log(msg: String) = h.post { prefs.log(msg) }
+
+    private fun labelOf(pkg: String): String = runCatching {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    }.getOrDefault(pkg)
+
+    /** Co telka zrovna dělá – posílá se do Domácnosti (volá se z vlákna Link). */
+    fun snapshot(): JSONObject {
+        val (vol, muted) = Link.volume(this)
+        val apps = JSONArray()
+        (prefs.favs ?: emptyList()).forEach { p -> apps.put(JSONObject().put("pkg", p).put("label", labelOf(p))) }
+        val fg = foreground
+        return JSONObject()
+            .put("screen", true)
+            .put("pkg", fg)
+            .put("label", if (fg.isBlank()) "" else labelOf(fg))
+            .put("level", Math.round(level * 100) / 100.0)
+            .put("sleepEnd", sleepEnd)
+            .put("sleepMin", sleepMin)
+            .put("vol", vol)
+            .put("muted", muted)
+            .put("apps", apps)
+            .put("ver", cz.pupik.televize.BuildConfig.VERSION_CODE)
+    }
+
+    /** Příkaz z Domácnosti (z vlákna Link → provede se na hlavním vlákně). */
+    fun runCommand(c: JSONObject) = h.post {
+        val t = c.optString("t")
+        prefs.log("z Domácnosti: $t")
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        runCatching {
+            when (t) {
+                "off" -> powerOff()
+                "home" -> goHome()
+                "open" -> {
+                    val pkg = c.optString("pkg")
+                    if (!cz.pupik.televize.data.Apps.launch(this, pkg)) prefs.log("aplikace $pkg nejde spustit")
+                }
+                "level" -> { startSleep(0); setLevel(c.optDouble("v", 1.0).toFloat()) }
+                "sleep" -> startSleep(c.optInt("min", 0))
+                "vol" -> {
+                    val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(c.optDouble("v", 0.0) / 100.0 * max).toInt(), AudioManager.FLAG_SHOW_UI)
+                }
+                "volStep" -> am.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    if (c.optInt("d") > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                    AudioManager.FLAG_SHOW_UI,
+                )
+                "mute" -> am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI)
+                "playpause" -> {
+                    am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                    am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                }
+                else -> {}
+            }
+        }.onFailure { prefs.log("chyba příkazu $t: ${it.message}") }
+    }
 
     // ---------- tlačítka a Domů ----------
     override fun onKeyEvent(e: KeyEvent): Boolean {

@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -107,6 +108,30 @@ fun SettingsScreen(ui: Ui) {
         item {
             Section("Služba Televize", if (ui.accOn) "Zapnutá – ztlumení, modré tlačítko, usínání i tlačítko Domů fungují." else "Vypnutá. Zapni ji: Usnadnění → Televize → Zapnout.") {
                 PillButton("gear", if (ui.accOn) "Usnadnění" else "Zapnout v Usnadnění", !ui.accOn, Modifier.focusRequester(first)) { ui.openAccessibility() }
+            }
+        }
+        item {
+            val ls by cz.pupik.televize.night.Link.state.collectAsState()
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            Section(
+                "Domácnost",
+                when {
+                    !ui.accOn -> "Nejdřív zapni službu Televize (výš) – přes ni telka s Domácností mluví."
+                    ls.paired -> if (ls.ok) "Propojeno ✓ – telku jde ovládat z mobilu v Domácnosti." else "Propojeno, ale teď bez spojení (${ls.error ?: "čekám"})."
+                    ls.code != null -> "V mobilu otevři Domácnost → Televize a napiš tenhle kód:"
+                    else -> "Ovládej telku z mobilu – vypnout, pustit appku, hlasitost, ztlumit, usínání."
+                },
+            ) {
+                if (!ls.paired && ls.code != null) {
+                    BasicText(ls.code!!.chunked(3).joinToString(" "), style = ts(56.sp, 300, spacing = 6.sp))
+                    Spacer(Modifier.height(4.dp))
+                    BasicText(ls.error ?: "Kód platí 15 minut. Jakmile ho napíšeš, tady se objeví „Propojeno ✓“.", style = ts(14.sp, 500, if (ls.error != null) C.pink else C.faint))
+                    Spacer(Modifier.height(12.dp))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (!ls.paired) PillButton("tv", if (ls.code == null) "Propojit s Domácností" else "Nový kód", ls.code == null) { cz.pupik.televize.night.Link.startPairing(ctx) }
+                    else PillButton("power", "Odpojit") { cz.pupik.televize.night.Link.unpair(ctx) }
+                }
             }
         }
         item {

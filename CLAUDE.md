@@ -35,6 +35,12 @@ Paměť projektu. Přečti celé na začátku práce a po větší změně sem p
 - Nájezd prvků při otevření (`Modifier.enter`), přetáčecí číslice hodin a teploty (`Roll`), **klidový režim** po 2 min bez ovladače (zůstanou hodiny, počasí a záře; první stisk jen probudí).
 - Náhledy: `previewMode` / `previewFocus` v `Kit.kt` (Paparazzi neumí zaostřit ani dohrát animace).
 
+## Propojení s Domácností (10. 11. 2026)
+- Tom chtěl telku ovládat z Domácnosti (`pupikt/Domacnost2`, https://domacnost.dilna.workers.dev) – tím se výjimečně propojuje; podrobnosti serveru v CLAUDE.md Domácnosti (`worker/tv.ts`).
+- `night/Link.kt`: vlákno ve službě, když je telka zapnutá, každé ~3 s `POST /api/tv/sync` s hlavičkou `X-TV-Key` (náhodný token v `Prefs.linkToken`; server zná jen SHA-256). Pošle `NightService.snapshot()`, příkazy provede `NightService.runCommand` (vypnout, Domů, spustit appku, jas, usínání, hlasitost přes `AudioManager.STREAM_MUSIC`, ztlumit, pauza = mediální klávesa).
+- Spárování: Nastavení → Domácnost → „Propojit s Domácností“ → `POST /api/tv/hello {code, h}` → 6místný kód na obrazovce → Tom ho napíše v Domácnosti → další sync vrátí 200 = propojeno. 401 po spárování = Domácnost telku odpojila.
+- Funguje jen se zapnutou službou usnadnění. Zapnout telku z mobilu nejde.
+
 ## Instalace u Toma
 1. Na telce z Obchodu Play appka **Downloader** (AFTVnews).
 2. Povolit jí instalaci neznámých aplikací (zeptá se sama).
