@@ -25,7 +25,9 @@ import kotlinx.coroutines.withContext
 enum class Screen { Home, All, Settings }
 
 /** Souhrn z Domácnosti pro hlavní obrazovku. */
-class House(val rooms: List<Room>, val running: List<String>)
+class House(val rooms: List<Room>, val running: List<String>, val dev: HouseDev? = null)
+/** Co dělají spotřebiče (pro domeček): klima režim, pračka run/pause/done/idle/off, vysavač uklízí, kotel topí. */
+class HouseDev(val kotel: Boolean, val burner: Boolean, val klimaOn: Boolean, val klimaMode: String, val wm: String, val vac: Boolean)
 class Room(val name: String, val temp: Double?, val hum: Double?)
 
 /** Stav celé obrazovky. */
@@ -155,7 +157,15 @@ class Ui(private val ctx: Context, private val scope: CoroutineScope) {
             (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.takeIf { it.optBoolean("on") }?.optString("text") }
                 .filter { !it.startsWith("Telka") }
         } ?: emptyList()
-        house = House(rooms.take(2), running.take(2))
+        val dev = o.optJSONObject("house")?.let { d ->
+            val k = d.optJSONObject("klima")
+            HouseDev(
+                kotel = d.optBoolean("kotel"), burner = d.optBoolean("burner"),
+                klimaOn = k?.optBoolean("on") ?: false, klimaMode = k?.optString("mode") ?: "",
+                wm = if (d.isNull("wm")) "off" else d.optString("wm", "off"), vac = d.optBoolean("vac"),
+            )
+        }
+        house = House(rooms.take(2), running.take(2), dev)
     }
 
     // ---------- aktualizace ----------

@@ -35,6 +35,13 @@ Paměť projektu. Přečti celé na začátku práce a po větší změně sem p
 - Nájezd prvků při otevření (`Modifier.enter`), přetáčecí číslice hodin a teploty (`Roll`), **klidový režim** po 2 min bez ovladače (zůstanou hodiny, počasí a záře; první stisk jen probudí).
 - Náhledy: `previewMode` / `previewFocus` v `Kit.kt` (Paparazzi neumí zaostřit ani dohrát animace).
 
+## Vzhled v3 (10. 11. 2026, Tom vybral nápady 3, 4, 5, 6)
+- Vše v `ui/Extras.kt` + `Dock` v `Home.kt`. Ověřeno jen náhledy Paparazzi (déšť, sníh), ne na telce.
+- **3 Živé počasí** (`WeatherFx`, v MainActivity hned nad `Aurora`): podle WMO kódu – déšť / mrholení (čárky), bouřka (déšť + občasný záblesk oblohy), sníh (vločky s houpáním), slunce ve dne (teplá záře vpravo nahoře), mraky (měkké skvrny plují), mlha (pruhy). Za jasné noci nic (hvězdy má Aurora). Jeden společný čas 6 s – kvůli slabému procesoru; vypnutá animace pozadí (`ui.aurora`) = stojí.
+- **4 Domeček** (`HouseMini`, vpravo dole vedle lišty, 232 dp; místo pruhu „Doma“, který se nevešel by pod počasí bez překrytí dlaždic): střecha s komínem (pára = hoří hořák), nahoře Ložnice (klimatizace s prouděním podle režimu – vločky/teplé vlnky/vítr/kapky – a svítící telka), dole Obývák (vysavač parkuje vlevo, při úklidu jezdí k pračce; pračka pere = poskakuje a točí se buben, pauza modrý buben, dopráno zelený, vypnutá zašedlá). Barva patra podle teploty (`tempColor` jako v Domácnosti), vlhkost ≥ 65 / ≤ 35 % červeně. Data `House.dev` (`HouseDev`) z pole `house` v souhrnu Domácnosti. Animuje se jen, když něco běží.
+- **5 Večerní nálada** (`EveningTint`, úplně navrchu v MainActivity): hodinu po západu slunce naběhne teplý tmavý závoj (hnědá 20 % + tmavší vršek), půl hodiny před východem zmizí. Východ/západ z Open-Meteo (`daily=sunrise,sunset` → `Weather.sunrise/sunset`), bez nich 7:00/17:00. Bez blend módů (staré GPU).
+- **6 Skleněný dok** (`Dock`): pod vybranou položkou jede pružně bílá „kapka“ (pozice z `onGloballyPositioned`), vybraná se zvětší 1,10×, sousedky 1,04× (jako dok na Macu), po horní hraně světlá linka. Pojistka `solo`: dokud se kapka nezměří, vybraná položka je bílá sama.
+
 ## Propojení s Domácností (10. 11. 2026)
 - Tom chtěl telku ovládat z Domácnosti (`pupikt/Domacnost2`, https://domacnost.dilna.workers.dev) – tím se výjimečně propojuje; podrobnosti serveru v CLAUDE.md Domácnosti (`worker/tv.ts`).
 - `night/Link.kt`: vlákno ve službě, když je telka zapnutá, každé ~3 s `POST /api/tv/sync` s hlavičkou `X-TV-Key` (náhodný token v `Prefs.linkToken`; server zná jen SHA-256). Pošle `NightService.snapshot()`, příkazy provede `NightService.runCommand` (vypnout, Domů, spustit appku, jas, usínání, hlasitost přes `AudioManager.STREAM_MUSIC`, ztlumit, pauza = mediální klávesa).
@@ -47,7 +54,7 @@ Paměť projektu. Přečti celé na začátku práce a po větší změně sem p
 - **Dalších 4 nápady (10. 11. 2026 večer, Tom vybral 1, 2, 3, 5)**:
   - **Oznámení na telce**: Domácnost (`notifyTick` → `tvToast`) pošle příkaz `toast {kind, title, body}`, jen když telka běží; `NightService.toast` = skleněná karta vpravo nahoře (emoji podle druhu: 🧺 pračka, 🤖 vysavač, 💧 klima, 🔥 kotel, ❄️ zima), 8 s, víc najednou za sebou. Čidla a propojení se na telku neposílají.
   - **Dobrou noc** (jen v ovladači v Domácnosti, ne jinde): příkaz `goodnight` → jas 20 % + usínání 60 min + ukazatel „☾ Dobrou noc“.
-  - **Pruh „Doma“** na hlavní obrazovce pod počasím (`HouseStrip`): teploty 2 místností + co běží (bez telky), `Link.house` → `POST /api/tv/dum` (X-TV-Key) = stejný souhrn jako widget (mezipaměť 4 min), každé 2 min, jen když je telka propojená. Dlaždice posunuté níž (top 92 dp).
+  - **Pruh „Doma“** (`HouseStrip`) – 10. 11. 2026 nahrazen domečkem (viz Vzhled v3). Data dál z `Link.house` → `POST /api/tv/dum` (X-TV-Key) = stejný souhrn jako widget (mezipaměť 4 min), každé 2 min, jen když je telka propojená.
   - (5 = telka ve widgetu – jen na straně Domácnosti.)
 - **Rychlý režim**: když sync vrátí `fast: true` (v mobilu je otevřená stránka Televize), další dotaz za 250 ms, jinak 3 s.
 

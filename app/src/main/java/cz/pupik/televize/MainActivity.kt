@@ -28,6 +28,8 @@ import cz.pupik.televize.ui.NightSheet
 import cz.pupik.televize.ui.Screen
 import cz.pupik.televize.ui.SettingsScreen
 import cz.pupik.televize.ui.Ui
+import cz.pupik.televize.ui.WeatherFx
+import cz.pupik.televize.ui.EveningTint
 
 class MainActivity : ComponentActivity() {
     private lateinit var ui: Ui
@@ -43,6 +45,8 @@ class MainActivity : ComponentActivity() {
                     else -> ui.focused?.tint ?: C.indigo
                 }
                 Aurora(ui.aurora, tint, calm = if (ui.screen != Screen.Home || ui.nightOpen) 1f else 0f)
+                // živé počasí v pozadí (déšť, sníh, bouřka, slunce, mraky, mlha)
+                WeatherFx(ui.weather, ui.aurora)
                 // klidový režim po 2 minutách bez ovladače
                 LaunchedEffect(Unit) {
                     while (true) {
@@ -65,6 +69,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 NightSheet(ui)
+                // večerní nálada: po západu slunce teplejší a tmavší obrazovka
+                EveningTint(ui.weather)
             }
             BackHandler(ui.nightOpen || ui.screen != Screen.Home) {
                 if (ui.nightOpen) ui.nightOpen = false else ui.screen = Screen.Home

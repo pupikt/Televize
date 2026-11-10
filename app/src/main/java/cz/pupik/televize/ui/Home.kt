@@ -28,6 +28,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicText
@@ -113,10 +119,6 @@ fun HomeScreen(ui: Ui) {
             Spacer(Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.End) {
                 Box(Modifier.enter(90)) { WeatherCard(ui) }
-                ui.house?.let { hs ->
-                    Spacer(Modifier.height(10.dp))
-                    Box(Modifier.enter(160)) { HouseStrip(hs) }
-                }
             }
         }
 
@@ -155,6 +157,11 @@ fun HomeScreen(ui: Ui) {
             ) { t ->
                 BasicText(t, style = ts(26.sp, 750, spacing = (-0.3).sp))
             }
+        }
+
+        // ---- domeček z Domácnosti: vpravo dole vedle lišty (v klidovém režimu zůstane) ----
+        ui.house?.let { hs ->
+            Box(Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 20.dp).enter(600, 30f)) { HouseMini(hs, ui.aurora) }
         }
 
         // ---- lišta ----
@@ -269,7 +276,10 @@ fun AppTile(
     }
 }
 
-/** Plovoucí skleněná lišta dole – jako v iOS. */
+/**
+ * Plovoucí skleněná lišta dole (Liquid Glass): pod vybranou položkou jede bílá „kapka“,
+ * vybraná se pružně zvětší a sousedky trochu taky – jako dok na Macu.
+ */
 @Composable
 private fun Dock(ui: Ui, now: Date) {
     val n = ui.night
@@ -279,23 +289,75 @@ private fun Dock(ui: Ui, now: Date) {
         n.level < 0.999f -> "Jas ${Math.round(n.level * 100)} %"
         else -> "Večer"
     }
-    Row(Modifier.glass(pill(), strong = true).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        DockItem("moon", nightLabel, ui, active, "dock-night") { ui.nightOpen = true }
-        DockItem("grid", "Aplikace", ui, id = "dock-apps") { ui.screen = Screen.All }
-        DockItem("gear", "Nastavení", ui, id = "dock-set") { ui.screen = Screen.Settings }
-        if (ui.update != null) DockItem("down", if (ui.updating != null) "${Math.round(ui.updating!! * 100)} %" else "Nová verze", ui, true, "dock-up") { ui.installUpdate() }
+    var sel by remember { mutableStateOf(-1) }
+    val pos = remember { mutableStateMapOf<Int, Pair<Float, Float>>() } // index → (x, šířka) v px
+    val dens = LocalDensity.current
+    val target = pos[sel]
+    val dx by animateFloatAsState(target?.first ?: 0f, spring(dampingRatio = 0.62f, stiffness = 320f), label = "dx")
+    val dw by animateFloatAsState(target?.second ?: 0f, spring(dampingRatio = 0.7f, stiffness = 320f), label = "dw")
+    val shown by animateFloatAsState(if (sel >= 0) 1f else 0f, tween(180), label = "shown")
+    val items = buildList {
+        add(Triple("moon", nightLabel, "dock-night"))
+        add(Triple("grid", "Aplikace", "dock-apps"))
+        add(Triple("gear", "Nastavení", "dock-set"))
+        if (ui.update != null) add(Triple("down", if (ui.updating != null) "${Math.round(ui.updating!! * 100)} %" else "Nová verze", "dock-up"))
+    }
+    Box(
+        Modifier
+            .glass(pill(), strong = true)
+            .drawWithContent {
+                // tenká světlá linka po horní hraně – „tekuté sklo“
+                drawContent()
+                drawLine(
+                    Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.55f), Color.Transparent)),
+                    Offset(size.height / 2, 1.2f), Offset(size.width - size.height / 2, 1.2f), 1.2f,
+                )
+            }
+            .padding(6.dp)
+    ) {
+        // kapka pod vybranou položkou
+        if (shown > 0.01f && dw > 0f) Box(
+            Modifier
+                .offset { IntOffset(dx.toInt(), 0) }
+                .width(with(dens) { dw.toDp() })
+                .height(46.dp)
+                .graphicsLayer { alpha = shown; scaleX = 1.10f; scaleY = 1.10f }
+                .shadow(18.dp, pill(), ambientColor = Color.White, spotColor = Color.White)
+                .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFDDE3FF))), pill())
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            items.forEachIndexed { i, (icon, label, id) ->
+                val near = sel >= 0 && kotlin.math.abs(sel - i) == 1
+                DockItem(
+                    icon, label, ui, active = i == 0 && active, id = id, near = near, solo = dw <= 0f,
+                    onSel = { f -> if (f) sel = i else if (sel == i) sel = -1 },
+                    onPlace = { x, w -> pos[i] = x to w },
+                ) {
+                    when (id) {
+                        "dock-night" -> ui.nightOpen = true
+                        "dock-apps" -> ui.screen = Screen.All
+                        "dock-set" -> ui.screen = Screen.Settings
+                        else -> ui.installUpdate()
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun DockItem(icon: String, label: String, ui: Ui, active: Boolean = false, id: String? = null, onClick: () -> Unit) {
-    Focusable(onClick = onClick, scale = 1.06f, onFocus = { ui.focused = null }, id = id) { f ->
-        Row(
-            Modifier
-                .then(if (f) Modifier.shadow(18.dp, pill(), ambientColor = Color.White, spotColor = Color.White).background(Brush.verticalGradient(listOf(Color.White, Color(0xFFDDE3FF))), pill()) else Modifier)
-                .padding(horizontal = 22.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+private fun DockItem(
+    icon: String, label: String, ui: Ui, active: Boolean = false, id: String? = null, near: Boolean = false, solo: Boolean = false,
+    onSel: (Boolean) -> Unit, onPlace: (Float, Float) -> Unit, onClick: () -> Unit,
+) {
+    val grow by animateFloatAsState(if (near) 1.04f else 1f, spring(dampingRatio = 0.55f, stiffness = 260f), label = "near")
+    Focusable(
+        Modifier.graphicsLayer { scaleX = grow; scaleY = grow }.onGloballyPositioned { c -> onPlace(c.positionInParent().x, c.size.width.toFloat()) },
+        onClick = onClick, scale = 1.10f, onFocus = { ui.focused = null }, id = id,
+    ) { f ->
+        LaunchedEffect(f) { onSel(f) }
+        // pojistka: dokud se kapka nezměří, vybraná položka je bílá sama
+        Row(Modifier.height(46.dp).then(if (f && solo) Modifier.background(Brush.verticalGradient(listOf(Color.White, Color(0xFFDDE3FF))), pill()) else Modifier).padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
             val c = if (f) INK else if (active) Color(0xFFC7D2FE) else C.text
             LineIcon(icon, 19.dp, c)
             Spacer(Modifier.width(10.dp))
@@ -341,26 +403,6 @@ fun Chip(label: String, selected: Boolean, mod: Modifier = Modifier, onClick: ()
             contentAlignment = Alignment.Center,
         ) {
             BasicText(label, style = ts(16.sp, if (selected || f) 800 else 600, if (f) INK else C.text))
-        }
-    }
-}
-
-/** Pruh „Doma“ pod počasím: teploty místností a co zrovna běží (z Domácnosti). */
-@Composable
-private fun HouseStrip(h: House) {
-    Row(Modifier.glass(pill()).padding(horizontal = 20.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-        LineIcon("home", 18.dp, Color(0xFF7DD3FC))
-        h.rooms.forEach { r ->
-            Spacer(Modifier.width(14.dp))
-            BasicText(r.name, style = ts(14.sp, 600, C.dim))
-            Spacer(Modifier.width(6.dp))
-            BasicText(r.temp?.let { "%.1f°".format(Locale("cs"), it) } ?: "–", style = ts(16.sp, 800))
-        }
-        h.running.forEach { t ->
-            Spacer(Modifier.width(14.dp))
-            Box(Modifier.size(6.dp).background(Color(0xFF4ADE80), pill()))
-            Spacer(Modifier.width(7.dp))
-            BasicText(t, style = ts(14.sp, 700, Color(0xFFBAE6FD)), maxLines = 1)
         }
     }
 }

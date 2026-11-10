@@ -14,6 +14,9 @@ class Weather(
     val min: Int,
     val hours: List<Hour>,
     val at: Long,
+    /** východ a západ slunce dnes (ms), když je Open-Meteo pošle */
+    val sunrise: Long? = null,
+    val sunset: Long? = null,
 )
 
 class Place(val name: String, val region: String, val lat: Double, val lon: Double)
@@ -31,7 +34,7 @@ object WeatherApi {
         "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
             "&current=temperature_2m,weather_code,is_day" +
             "&hourly=temperature_2m,weather_code,is_day" +
-            "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=2"
+            "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&forecast_days=2"
     )
 
     fun parse(json: String, at: Long): Weather {
@@ -55,6 +58,8 @@ object WeatherApi {
             }
         }
         val d = o.getJSONObject("daily")
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm", java.util.Locale.US)
+        fun time(k: String) = runCatching { fmt.parse(d.getJSONArray(k).getString(0))!!.time }.getOrNull()
         return Weather(
             temp = Math.round(cur.getDouble("temperature_2m")).toInt(),
             code = cur.getInt("weather_code"),
@@ -63,6 +68,8 @@ object WeatherApi {
             min = Math.round(d.getJSONArray("temperature_2m_min").getDouble(0)).toInt(),
             hours = hours,
             at = at,
+            sunrise = time("sunrise"),
+            sunset = time("sunset"),
         )
     }
 
