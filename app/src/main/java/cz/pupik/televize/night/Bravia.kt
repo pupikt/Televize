@@ -50,7 +50,7 @@ object Bravia {
     @Volatile private var goodHost: String? = null
 
     /** Výsledek posledního tlačítka: HTTP kód (200 = OK, 401/403 = klíč), -1 = telka neodpovídá; text = podrobnosti. */
-    class Result(val code: Int, val detail: String)
+    class Result(val code: Int, val detail: String, val why: String? = null)
 
     /** Pošle telce stisk tlačítka přes IP control. */
     fun key(psk: String, k: String): Result {
@@ -72,10 +72,30 @@ object Bravia {
                 val txt = runCatching { (if (rc < 400) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } }.getOrNull().orEmpty()
                 Result(rc, "$host: HTTP $rc ${txt.take(120).replace(Regex("\\s+"), " ")}")
             }.getOrElse { Result(-1, "$host: ${it.javaClass.simpleName} ${it.message ?: ""}".take(160)) }
-            last = r
             if (r.code == 200) { goodHost = host; return r }
-            if (r.code in 400..499) return r // telka odpověděla – jen nechce (klíč / nastavení)
+            // 403 z 127.0.0.1 neznamená konec – Sony někdy pustí jen dotazy „ze sítě“, zkusit i vlastní adresu
+            if (last.code !in 400..499 || r.code in 400..499) last = r
         }
-        return last
+        // proč? zkusit stejným klíčem obyčejný dotaz na stav – pozná se, jestli sedí klíč
+        val keyOk = tries.any { h -> checkKey(h, psk) }
+        val why = when {
+            last.code == -1 -> "off"
+            keyOk -> "remote"
+            else -> "psk"
+        }
+        return Result(last.code, last.detail, why)
     }
+
+    /** Sedí klíč? (getPowerStatus na /sony/system s X-Auth-PSK) */
+    private fun checkKey(host: String, psk: String): Boolean = runCatching {
+        val c = URL("http://$host/sony/system").openConnection() as HttpURLConnection
+        c.requestMethod = "POST"; c.doOutput = true
+        c.connectTimeout = 1500; c.readTimeout = 3000
+        c.setRequestProperty("Content-Type", "application/json")
+        c.setRequestProperty("X-Auth-PSK", psk)
+        c.outputStream.use { it.write("""{"method":"getPowerStatus","id":50,"params":[],"version":"1.0"}""".toByteArray()) }
+        val rc = c.responseCode
+        val txt = (if (rc < 400) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
+        rc == 200 && txt.contains("\"result\"")
+    }.getOrDefault(false)
 }

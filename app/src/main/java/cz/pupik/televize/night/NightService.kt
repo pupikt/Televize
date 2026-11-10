@@ -293,6 +293,7 @@ class NightService : AccessibilityService() {
             .put("ver", cz.pupik.televize.BuildConfig.VERSION_CODE)
             .put("psk", prefs.psk.isNotBlank())
             .put("irccInfo", irccInfo ?: JSONObject.NULL)
+            .put("irccWhy", irccWhy ?: JSONObject.NULL)
             .put("ip", Bravia.hosts().firstOrNull { it != "127.0.0.1" } ?: JSONObject.NULL)
             .put("ircc", ircc ?: if (prefs.psk.isBlank()) "nopsk" else JSONObject.NULL)
     }
@@ -300,11 +301,12 @@ class NightService : AccessibilityService() {
     /** Jak dopadlo poslední tlačítko přes IP control: ok / nopsk / fail. */
     @Volatile var ircc: String? = null
     @Volatile var irccInfo: String? = null
+    @Volatile var irccWhy: String? = null
 
     /** Příkaz z Domácnosti. Volá se z vlákna Link: tlačítka jdou rovnou odsud (síť), ostatní na hlavní vlákno. */
     fun runCommand(c: JSONObject) {
         when (c.optString("t")) {
-            "psk" -> { prefs.psk = c.optString("v"); ircc = null; log("klíč IP control uložen z Domácnosti"); return }
+            "psk" -> { prefs.psk = c.optString("v"); ircc = null; irccInfo = null; irccWhy = null; log("klíč IP control uložen z Domácnosti"); return }
             "key" -> {
                 val k = c.optString("k")
                 if (k == "back") { h.post { performGlobalAction(GLOBAL_ACTION_BACK) }; return }
@@ -314,6 +316,7 @@ class NightService : AccessibilityService() {
                 val r = Bravia.key(psk, k)
                 ircc = if (r.code == 200) "ok" else "fail"
                 irccInfo = if (r.code == 200) null else r.detail
+                irccWhy = if (r.code == 200) null else r.why
                 if (r.code != 200) log("tlačítko $k: ${r.detail}")
                 return
             }
