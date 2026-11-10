@@ -43,6 +43,14 @@ class Prefs(ctx: Context) {
         set(v) = p.edit().putFloat("level", v).putLong("levelAt", System.currentTimeMillis()).apply()
     val levelAt: Long get() = p.getLong("levelAt", 0)
 
+    /** Záznam služby (posledních 40 řádků) – v Nastavení, pro hledání chyb. */
+    val log: List<String> get() = p.getString("log", "")!!.split('\n').filter { it.isNotBlank() }
+    fun log(msg: String) {
+        val t = java.text.SimpleDateFormat("d.M. H:mm:ss", java.util.Locale.ROOT).format(java.util.Date())
+        val l = (log + "$t  $msg").takeLast(40)
+        p.edit().putString("log", l.joinToString("\n")).apply()
+    }
+
     var weatherCache: String?
         get() = p.getString("wcache", null)
         set(v) = p.edit().putString("wcache", v).apply()

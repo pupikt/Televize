@@ -153,6 +153,14 @@ fun SettingsScreen(ui: Ui) {
             }
         }
         item {
+            val running = cz.pupik.televize.night.NightService.instance != null
+            Section("Záznam služby", if (running) "Služba běží." else "Služba teď neběží.") {
+                val lines = ui.prefs.log.takeLast(12).reversed()
+                if (lines.isEmpty()) BasicText("Zatím nic.", style = ts(14.sp, 500, C.faint))
+                lines.forEach { BasicText(it, style = ts(13.sp, 500, C.dim)) }
+            }
+        }
+        item {
             Section("Telka Sony", "Obraz, zvuk, síť a další původní nastavení.") {
                 PillButton("gear", "Otevřít nastavení telky") { ui.openTvSettings() }
             }

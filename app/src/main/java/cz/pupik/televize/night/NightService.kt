@@ -97,6 +97,7 @@ class NightService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        Prefs(this).log("služba zapnutá")
         // chytat i tlačítko Domů přímo (spolehlivější než čekat na menu Sony)
         serviceInfo = serviceInfo?.apply {
             flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
@@ -115,6 +116,7 @@ class NightService : AccessibilityService() {
 
     override fun onDestroy() {
         instance = null
+        runCatching { prefs.log("služba skončila") }
         runCatching { unregisterReceiver(screen) }
         h.removeCallbacksAndMessages(null)
         runCatching { veil?.let { wm.removeView(it) } }
@@ -264,7 +266,7 @@ class NightService : AccessibilityService() {
     override fun onKeyEvent(e: KeyEvent): Boolean {
         if (e.keyCode == KeyEvent.KEYCODE_HOME && prefs.takeHome) {
             lastHomeKey = System.currentTimeMillis()
-            if (e.action == KeyEvent.ACTION_UP) goHome()
+            if (e.action == KeyEvent.ACTION_UP) { prefs.log("Domů (z $foreground)"); goHome() }
             return true
         }
         if (e.keyCode != KeyEvent.KEYCODE_PROG_BLUE) return false
@@ -291,16 +293,19 @@ class NightService : AccessibilityService() {
         foreground = pkg
         lastSeen = pkg + " / " + (e.className ?: "")
         if (pkg in stockHome && prefs.takeHome) {
-            val now = SystemClock.elapsedRealtime()
-            redirects.removeAll { now - it > 10_000 }
-            if (redirects.size >= 4) return // pojistka, kdyby se něco zacyklilo
-            redirects += now
-            runCatching {
-                startActivity(
-                    Intent(this, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                )
-            }
+            // chvilku počkat, ať se nepřetahujeme s menu Sony, které se teprve otevírá
+            h.removeCallbacks(redirect)
+            h.postDelayed(redirect, 250)
         }
+    }
+
+    private val redirect = Runnable {
+        if (foreground !in stockHome) return@Runnable
+        val now = SystemClock.elapsedRealtime()
+        redirects.removeAll { now - it > 15_000 }
+        if (redirects.size >= 6) { prefs.log("pojistka: $foreground se pořád vrací – nechávám ho"); return@Runnable }
+        redirects += now
+        prefs.log("přesměrování z $foreground")
+        goHome()
     }
 }
