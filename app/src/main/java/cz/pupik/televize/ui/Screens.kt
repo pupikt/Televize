@@ -56,19 +56,21 @@ fun AllAppsScreen(ui: Ui) {
         Spacer(Modifier.height(18.dp))
         LazyVerticalGrid(
             GridCells.Fixed(5),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp, start = 10.dp, end = 10.dp),
+            contentPadding = PaddingValues(top = 18.dp, bottom = 48.dp, start = 12.dp, end = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(22.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             itemsIndexed(ui.apps, key = { _, a -> a.pkg }) { i, app ->
-                Box(contentAlignment = Alignment.Center) {
-                    AppCard(
-                        app, big = false,
+                Column(Modifier.enter(60 + (i % 5) * 40 + (i / 5) * 50), horizontalAlignment = Alignment.CenterHorizontally) {
+                    AppTile(
+                        app, 152.dp, 86.dp, ui,
                         onClick = { ui.open(app) },
                         onLong = { ui.toggleFav(app) },
                         mod = if (i == 0) Modifier.focusRequester(first) else Modifier,
-                        star = app.pkg in ui.favPkgs,
+                        star = app.pkg in ui.favPkgs, scale = 1.12f,
                     )
+                    Spacer(Modifier.height(9.dp))
+                    BasicText(app.label, style = ts(14.sp, 600, C.dim), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.width(152.dp))
                 }
             }
         }
@@ -169,7 +171,7 @@ fun SettingsScreen(ui: Ui) {
 
 @Composable
 private fun Section(title: String, text: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().glass(rounded(26.dp)).padding(horizontal = 28.dp, vertical = 22.dp)) {
+    Column(Modifier.fillMaxWidth().glass(rounded(28.dp)).padding(horizontal = 28.dp, vertical = 22.dp)) {
         BasicText(title, style = ts(21.sp, 800))
         Spacer(Modifier.height(4.dp))
         BasicText(text, style = ts(16.sp, 500, C.dim))

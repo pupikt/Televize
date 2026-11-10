@@ -26,6 +26,15 @@ Paměť projektu. Přečti celé na začátku práce a po větší změně sem p
 - **Sestavení**: push na `main` → GitHub Actions (`.github/workflows/build.yml`) → release `vN` (N = číslo běhu = versionCode) s `televize.apk`. Podpisový klíč `app/televize.jks` je v repu schválně (heslo `televize`) – aktualizace musí být podepsané stejně; nic tajného to nechrání.
 - Lokálně: Android SDK do `/root/android-sdk` (cmdline-tools → `platforms;android-35`, `build-tools;35.0.0`), `local.properties` se `sdk.dir`, `./gradlew assembleRelease`. Vzhled se kontroluje přes Paparazzi v dočasné kopii projektu (obrazovka 1920×1080, xhdpi = 960×540 dp) – do repa se nedává.
 
+## Vzhled v2 (10. 11. 2026, Tom: „originál loga, topová grafika, udělej maximum“)
+- **Dlaždice z originálních log**, která Tom poslal (`tools/logos/`): `python3 tools/tiles.py` → `res/drawable-nodpi/tile_{youtube,netflix,disney,oneplay}.png` (640×360; YouTube = červená ikona + bílý nápis na tmavé, Netflix na černé s červenou září, Disney+ bílé na modro-tyrkysové, Oneplay = výřez originálu). Přiřazení podle názvu/balíčku v `BRANDS` (`data/Apps.kt`), každá značka má barvu `tint`; ostatní aplikace mají svůj banner a `tint` = průměrná barva.
+- **Pozadí** `ui/Aurora.kt`: hvězdy, dva předrozmazané závoje polární záře (`python3 tools/aurora.py` → `aurora_a/b.png`, jen se pomalu posouvají – šetří výkon) a zespodu **záře v barvě vybrané aplikace** (plynule se přelévá).
+- **Sklo je průsvitné** (`Modifier.glass`, `solid = true` jen pro panel Večer). Vybrané tlačítko = **bílá pilulka s tmavým textem** (na telce vidět na dálku).
+- **Dlaždice** `AppTile`: při najetí se pružně zvětší, dostane světlou hranu, záři v barvě aplikace a přejede po ní odlesk; název vybrané aplikace je pod řadou (jinak pozdrav). Spuštění = dlaždice se „nafoukne“ a obrazovka ztmavne (230 ms).
+- **Lišta dole** (`Dock`): Večer (ukazuje „Jas 50 %“ / „Usne za N min“), Aplikace, Nastavení, případně Nová verze.
+- Nájezd prvků při otevření (`Modifier.enter`), přetáčecí číslice hodin a teploty (`Roll`), **klidový režim** po 2 min bez ovladače (zůstanou hodiny, počasí a záře; první stisk jen probudí).
+- Náhledy: `previewMode` / `previewFocus` v `Kit.kt` (Paparazzi neumí zaostřit ani dohrát animace).
+
 ## Instalace u Toma
 1. Na telce z Obchodu Play appka **Downloader** (AFTVnews).
 2. Povolit jí instalaci neznámých aplikací (zeptá se sama).

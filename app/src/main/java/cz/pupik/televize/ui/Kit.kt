@@ -14,10 +14,17 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -55,38 +62,44 @@ fun ts(size: TextUnit, weight: Int = 500, color: Color = C.text, spacing: TextUn
     TextStyle(fontFamily = Manrope, fontWeight = FontWeight(weight), fontSize = size, color = color, letterSpacing = spacing)
 
 // ---------- Liquid Glass ----------
-/** Průsvitné sklo: jemná výplň, světlá hrana nahoře, odlesk vlevo nahoře. */
-fun Modifier.glass(shape: Shape, focused: Boolean = false, tint: Color = Color.White, strong: Boolean = false): Modifier {
-    val fillTop = if (focused) 0.30f else if (strong) 0.16f else 0.11f
-    val fillBot = if (focused) 0.14f else if (strong) 0.07f else 0.045f
-    return this
-        .shadow(
-            if (focused) 28.dp else 10.dp, shape,
-            ambientColor = if (focused) tint else Color.Black,
-            spotColor = if (focused) tint else Color.Black,
-        )
-        .background(Brush.verticalGradient(listOf(Color(0xFF151A2E), Color(0xFF0E1222))), shape)
+/**
+ * Průsvitné sklo: pozadí prosvítá, tvar dělají odlesky hran.
+ * [solid] = neprůhledný podklad se stínem (panely přes obsah).
+ */
+fun Modifier.glass(shape: Shape, focused: Boolean = false, tint: Color = Color.White, strong: Boolean = false, solid: Boolean = false): Modifier {
+    val fillTop = if (focused) 0.34f else if (strong) 0.17f else 0.10f
+    val fillBot = if (focused) 0.16f else if (strong) 0.08f else 0.035f
+    var m = this
+    if (solid) m = m
+        .shadow(24.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+        .background(Brush.verticalGradient(listOf(Color(0xFF1A1F38), Color(0xFF0D1122))), shape)
+    return m
         .background(Brush.verticalGradient(listOf(tint.copy(alpha = fillTop), tint.copy(alpha = fillBot))), shape)
         .border(
-            if (focused) 2.dp else 1.dp,
+            if (focused) 1.5.dp else 1.dp,
             Brush.verticalGradient(
-                if (focused) listOf(Color.White, Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.85f))
-                else listOf(Color.White.copy(alpha = 0.42f), Color.White.copy(alpha = 0.06f), Color.White.copy(alpha = 0.16f))
+                if (focused) listOf(Color.White.copy(alpha = 0.95f), Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.7f))
+                else listOf(Color.White.copy(alpha = 0.38f), Color.White.copy(alpha = 0.05f), Color.White.copy(alpha = 0.14f))
             ),
             shape,
         )
+        .clip(shape)
         .drawWithContent {
             drawContent()
-            // odlesk – jako světlo dopadající na sklo zleva shora
+            // odlesk – světlo dopadající na sklo zleva shora
             drawRect(
                 Brush.radialGradient(
-                    listOf(Color.White.copy(alpha = if (focused) 0.22f else 0.10f), Color.Transparent),
-                    center = Offset(size.width * 0.15f, 0f),
-                    radius = size.maxDimension * 0.7f,
+                    listOf(Color.White.copy(alpha = if (focused) 0.20f else 0.09f), Color.Transparent),
+                    center = Offset(size.width * 0.12f, 0f),
+                    radius = size.maxDimension * 0.65f,
                 )
             )
         }
 }
+
+/** Náhledy (Paparazzi) neumí zaostřit – tady jde vynutit, co má vypadat jako vybrané. */
+var previewFocus: String? = null
+var previewMode = false
 
 /**
  * Prvek, na který jde najet ovladačem: OK = klik, podržet OK = dlouhý stisk.
@@ -99,15 +112,22 @@ fun Focusable(
     onLong: (() -> Unit)? = null,
     scale: Float = 1.08f,
     focusMod: Modifier = Modifier,
+    onFocus: (() -> Unit)? = null,
+    id: String? = null,
     content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     val src = remember { MutableInteractionSource() }
-    val focused by src.collectIsFocusedAsState()
-    val s by animateFloatAsState(if (focused) scale else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow), label = "s")
+    val real by src.collectIsFocusedAsState()
+    val focused = real || (id != null && id == previewFocus)
+    if (onFocus != null) LaunchedEffect(focused) { if (focused) onFocus() }
+    val s by animateFloatAsState(if (focused) scale else 1f, spring(dampingRatio = 0.5f, stiffness = 260f), label = "s")
     val st = remember { BooleanArray(2) } // [stisknuto, dlouhý stisk už proběhl]
+    var pressed by remember { mutableStateOf(false) }
+    val press by animateFloatAsState(if (pressed) 0.94f else 1f, spring(dampingRatio = 0.6f, stiffness = 900f), label = "p")
     Box(
         modifier
-            .graphicsLayer { scaleX = s; scaleY = s }
+            .zIndex(if (focused) 1f else 0f)
+            .graphicsLayer { scaleX = s * press; scaleY = s * press }
             .then(focusMod)
             .onKeyEvent { ev ->
                 val k = ev.nativeKeyEvent
@@ -116,13 +136,13 @@ fun Focusable(
                 if (!ok) return@onKeyEvent false
                 when (k.action) {
                     AKey.ACTION_DOWN -> {
-                        if (k.repeatCount == 0) { st[0] = true; st[1] = false }
-                        else if (onLong != null && !st[1] && st[0]) { st[1] = true; onLong() }
+                        if (k.repeatCount == 0) { st[0] = true; st[1] = false; pressed = true }
+                        else if (onLong != null && !st[1] && st[0]) { st[1] = true; pressed = false; onLong() }
                         true
                     }
                     AKey.ACTION_UP -> {
                         val fire = st[0] && !st[1]
-                        st[0] = false; st[1] = false
+                        st[0] = false; st[1] = false; pressed = false
                         if (fire) onClick()
                         true
                     }
@@ -131,6 +151,15 @@ fun Focusable(
             }
             .focusable(interactionSource = src),
     ) { content(focused) }
+}
+
+/** Nájezd při otevření obrazovky: prvek vyjede zdola a rozsvítí se, každý o chvilku později. */
+@Composable
+fun Modifier.enter(delayMs: Int, dy: Float = 26f): Modifier {
+    if (previewMode) return this
+    val a = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { delay(delayMs.toLong()); a.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 120f)) }
+    return this.graphicsLayer { alpha = a.value.coerceIn(0f, 1f); translationY = (1f - a.value) * dy * density }
 }
 
 val R12: Dp = 12.dp

@@ -18,6 +18,7 @@ import cz.pupik.televize.night.Night
 import cz.pupik.televize.night.NightService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -30,6 +31,14 @@ class Ui(private val ctx: Context, private val scope: CoroutineScope) {
     var screen by mutableStateOf(Screen.Home)
     var nightOpen by mutableStateOf(false)
     var homeFocusTick by mutableStateOf(0)
+
+    /** Aplikace, na které je zrovna ovladač (podle ní svítí pozadí). */
+    var focused by mutableStateOf<TvApp?>(null)
+    /** Balíček, který se právě spouští (animace). */
+    var launching by mutableStateOf<String?>(null)
+    /** Klidový režim – po chvíli nečinnosti zůstanou jen hodiny. */
+    var idle by mutableStateOf(false)
+    var lastKey = System.currentTimeMillis()
 
     var apps by mutableStateOf<List<TvApp>>(emptyList())
     var favPkgs by mutableStateOf<List<String>>(emptyList())
@@ -58,7 +67,16 @@ class Ui(private val ctx: Context, private val scope: CoroutineScope) {
         }
     }
 
-    fun open(app: TvApp) { Apps.launch(ctx, app.pkg) }
+    fun open(app: TvApp) {
+        if (launching != null) return
+        launching = app.pkg
+        scope.launch {
+            delay(230)
+            Apps.launch(ctx, app.pkg)
+            delay(900)
+            launching = null
+        }
+    }
 
     fun toggleFav(app: TvApp) {
         favPkgs = if (app.pkg in favPkgs) favPkgs - app.pkg else favPkgs + app.pkg
