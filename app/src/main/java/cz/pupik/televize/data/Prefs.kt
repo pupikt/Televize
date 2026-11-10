@@ -65,7 +65,8 @@ class Prefs(ctx: Context) {
     /** Spárování ovladače přes PIN (Sony „Normální“ ověřování) – cookie auth=… */
     var irccCookie: String
         get() = p.getString("irccCookie", "")!!
-        set(v) = p.edit().putString("irccCookie", v).apply()
+        set(v) = p.edit().putString("irccCookie", v).putLong("irccCookieAt", System.currentTimeMillis()).apply()
+    val irccCookieAt: Long get() = p.getLong("irccCookieAt", 0)
 
     var weatherCache: String?
         get() = p.getString("wcache", null)

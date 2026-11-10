@@ -276,6 +276,13 @@ class NightService : AccessibilityService() {
 
     /** Co telka zrovna dělá – posílá se do Domácnosti (volá se z vlákna Link). */
     fun snapshot(): JSONObject {
+        // cookie ze spárování platí cca 2 týdny → každé 3 dny obnovit (bez PINu)
+        val ck = prefs.irccCookie
+        if (ck.isNotBlank() && System.currentTimeMillis() - prefs.irccCookieAt > 3 * 24 * 3600_000L) {
+            val (rc, nck) = Bravia.register(null, ck)
+            if (rc == 200 && nck != null) { prefs.irccCookie = nck; log("cookie ovladače obnovena") }
+            else log("obnova cookie ovladače: $rc")
+        }
         val (vol, muted) = Link.volume(this)
         val apps = JSONArray()
         (prefs.favs ?: emptyList()).forEach { p -> apps.put(JSONObject().put("pkg", p).put("label", labelOf(p))) }
@@ -292,6 +299,8 @@ class NightService : AccessibilityService() {
             .put("apps", apps)
             .put("ver", cz.pupik.televize.BuildConfig.VERSION_CODE)
             .put("psk", prefs.psk.isNotBlank())
+            // průkaz ze spárování – Domácnost ho dá zkratce v iPhonu, která telku zapne
+            .put("cookie", prefs.irccCookie.ifBlank { null } ?: JSONObject.NULL)
             .put("irccInfo", irccInfo ?: JSONObject.NULL)
             .put("irccWhy", irccWhy ?: JSONObject.NULL)
             .put("irccPair", irccPair ?: if (prefs.irccCookie.isNotBlank()) "ok" else JSONObject.NULL)
