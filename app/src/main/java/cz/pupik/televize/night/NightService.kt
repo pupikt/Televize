@@ -44,7 +44,10 @@ class NightService : AccessibilityService() {
         val state = MutableStateFlow(Night())
         @Volatile var instance: NightService? = null
 
-        private val STOCK_HOME = setOf(
+        /** Co služba naposledy viděla (pro Nastavení – ladění na dálku). */
+        @Volatile var lastSeen = ""
+        @Volatile var lastHomeKey = 0L
+        private val KNOWN_HOME = setOf(
             "com.google.android.tvlauncher",
             "com.google.android.leanbacklauncher",
             "com.google.android.apps.tv.launcherx",
@@ -72,8 +75,33 @@ class NightService : AccessibilityService() {
     private var blueDown = false
     private val redirects = ArrayList<Long>()
 
+    /** Všechny domovské obrazovky v telce kromě naší (Sony jich může mít víc). */
+    private val stockHome: Set<String> by lazy {
+        val pm = packageManager
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val found = pm.queryIntentActivities(home, 0).map { it.activityInfo.packageName }.toMutableSet()
+        found += KNOWN_HOME
+        found -= packageName
+        found -= setOf("com.android.settings", "com.android.tv.settings", "com.android.provision")
+        found
+    }
+
+    private fun goHome() {
+        runCatching {
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            )
+        }
+    }
+
     override fun onServiceConnected() {
         instance = this
+        // chytat i tlačítko Domů přímo (spolehlivější než čekat na menu Sony)
+        serviceInfo = serviceInfo?.apply {
+            flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        }
         prefs = Prefs(this)
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         // Ztlumení z minula vydrží jen do rána (6 h).
@@ -234,6 +262,11 @@ class NightService : AccessibilityService() {
 
     // ---------- tlačítka a Domů ----------
     override fun onKeyEvent(e: KeyEvent): Boolean {
+        if (e.keyCode == KeyEvent.KEYCODE_HOME && prefs.takeHome) {
+            lastHomeKey = System.currentTimeMillis()
+            if (e.action == KeyEvent.ACTION_UP) goHome()
+            return true
+        }
         if (e.keyCode != KeyEvent.KEYCODE_PROG_BLUE) return false
         if (foreground == LIVE_TV) return false // v živém vysílání patří barevná tlačítka teletextu
         if (e.action == KeyEvent.ACTION_DOWN) {
@@ -256,7 +289,8 @@ class NightService : AccessibilityService() {
         val pkg = e.packageName?.toString() ?: return
         if (pkg == "com.android.systemui") return
         foreground = pkg
-        if (pkg in STOCK_HOME && prefs.takeHome) {
+        lastSeen = pkg + " / " + (e.className ?: "")
+        if (pkg in stockHome && prefs.takeHome) {
             val now = SystemClock.elapsedRealtime()
             redirects.removeAll { now - it > 10_000 }
             if (redirects.size >= 4) return // pojistka, kdyby se něco zacyklilo
