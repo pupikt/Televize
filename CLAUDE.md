@@ -41,6 +41,7 @@ Paměť projektu. Přečti celé na začátku práce a po větší změně sem p
 - Spárování: Nastavení → Domácnost → „Propojit s Domácností“ → `POST /api/tv/hello {code, h}` → 6místný kód na obrazovce → Tom ho napíše v Domácnosti → další sync vrátí 200 = propojeno. 401 po spárování = Domácnost telku odpojila.
 - Funguje jen se zapnutou službou usnadnění. Zapnout telku z mobilu nejde.
 - **Ovladač z mobilu** (10. 11. 2026): příkaz `key` – `back` = `GLOBAL_ACTION_BACK`, `home` = `goHome()`, ostatní (šipky, OK, menu, play…) = `Bravia.key` → IRCC `http://127.0.0.1/sony/IRCC` (když nic, zkusí vlastní IPv4 adresy telky; fungující si pamatuje; přesná chyba do stavu `irccInfo` a do Záznamu služby) (SOAP, hlavička `X-Auth-PSK` = `Prefs.psk`). Klíč jde nastavit v Nastavení Televize nebo poslat z Domácnosti (příkaz `psk`). Výsledek posledního tlačítka ve stavu `ircc` (ok / nopsk / fail). Tlačítka se provádějí rovnou ve vlákně Link (síť), ostatní příkazy na hlavním vlákně.
+- Ve stavu se posílá i `ip` = adresa telky v domácí síti (pro zapínání přes Zkratky v iPhonu – viz CLAUDE.md Domácnosti).
 - **Rychlý režim**: když sync vrátí `fast: true` (v mobilu je otevřená stránka Televize), další dotaz za 250 ms, jinak 3 s.
 
 ## Instalace u Toma

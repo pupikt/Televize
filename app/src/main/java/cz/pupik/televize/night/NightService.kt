@@ -293,6 +293,7 @@ class NightService : AccessibilityService() {
             .put("ver", cz.pupik.televize.BuildConfig.VERSION_CODE)
             .put("psk", prefs.psk.isNotBlank())
             .put("irccInfo", irccInfo ?: JSONObject.NULL)
+            .put("ip", Bravia.hosts().firstOrNull { it != "127.0.0.1" } ?: JSONObject.NULL)
             .put("ircc", ircc ?: if (prefs.psk.isBlank()) "nopsk" else JSONObject.NULL)
     }
 

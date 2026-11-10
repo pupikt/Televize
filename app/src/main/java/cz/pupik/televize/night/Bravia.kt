@@ -36,7 +36,7 @@ object Bravia {
     )
 
     /** Adresy, na kterých telka může poslouchat: sama sebe, pak vlastní adresa v domácí síti. */
-    private fun hosts(): List<String> {
+    fun hosts(): List<String> {
         val out = mutableListOf("127.0.0.1")
         runCatching {
             for (ni in java.net.NetworkInterface.getNetworkInterfaces()) {
