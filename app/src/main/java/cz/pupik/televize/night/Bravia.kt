@@ -53,7 +53,7 @@ object Bravia {
     class Result(val code: Int, val detail: String, val why: String? = null)
 
     /** Pošle telce stisk tlačítka přes IP control. */
-    fun key(psk: String, k: String): Result {
+    fun key(psk: String, k: String, cookie: String = ""): Result {
         val code = KEYS[k] ?: return Result(-1, "neznámé tlačítko")
         val body = """<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:X_SendIRCC xmlns:u="urn:schemas-sony-com:service:IRCC:1"><IRCCCode>$code</IRCCCode></u:X_SendIRCC></s:Body></s:Envelope>"""
         val tries = listOfNotNull(goodHost) + hosts().filter { it != goodHost }
@@ -67,6 +67,7 @@ object Bravia {
                 c.setRequestProperty("Content-Type", "text/xml; charset=UTF-8")
                 c.setRequestProperty("SOAPACTION", "\"urn:schemas-sony-com:service:IRCC:1#X_SendIRCC\"")
                 if (psk.isNotBlank()) c.setRequestProperty("X-Auth-PSK", psk)
+                if (cookie.isNotBlank()) c.setRequestProperty("Cookie", cookie)
                 c.outputStream.use { it.write(body.toByteArray()) }
                 val rc = c.responseCode
                 val txt = runCatching { (if (rc < 400) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } }.getOrNull().orEmpty()
@@ -98,4 +99,34 @@ object Bravia {
         val txt = (if (rc < 400) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
         rc == 200 && txt.contains("\"result\"")
     }.getOrDefault(false)
+
+    /**
+     * Spárování ovladače jako oficiální appky Sony: actRegister bez PINu → telka ukáže PIN na obrazovce,
+     * pak znovu s PINem (Basic ":PIN") → cookie auth=…  Se starou cookie jde obnovit bez PINu.
+     * Vrací (HTTP kód, cookie nebo null).
+     */
+    fun register(pin: String?, cookie: String?): Pair<Int, String?> {
+        val body = """{"id":13,"method":"actRegister","version":"1.0","params":[{"clientid":"televize-domacnost:1","nickname":"Televize (Domácnost)","level":"private"},[{"value":"yes","function":"WOL"}]]}"""
+        val hostsToTry = listOfNotNull(goodHost) + hosts().filter { it != goodHost }
+        var last = -1 to (null as String?)
+        for (host in hostsToTry) {
+            val r = runCatching {
+                val c = URL("http://$host/sony/accessControl").openConnection() as HttpURLConnection
+                c.requestMethod = "POST"; c.doOutput = true
+                c.connectTimeout = 1500; c.readTimeout = 4000
+                c.setRequestProperty("Content-Type", "application/json")
+                if (pin != null) c.setRequestProperty("Authorization", "Basic " + android.util.Base64.encodeToString(":$pin".toByteArray(), android.util.Base64.NO_WRAP))
+                if (!cookie.isNullOrBlank()) c.setRequestProperty("Cookie", cookie)
+                c.outputStream.use { it.write(body.toByteArray()) }
+                val rc = c.responseCode
+                val ck = c.headerFields.entries.filter { it.key.equals("Set-Cookie", true) }.flatMap { it.value }
+                    .firstOrNull { it.startsWith("auth=") }?.substringBefore(';')
+                runCatching { (if (rc < 400) c.inputStream else c.errorStream)?.close() }
+                rc to ck
+            }.getOrElse { -1 to null }
+            last = r
+            if (r.first != -1) return r
+        }
+        return last
+    }
 }

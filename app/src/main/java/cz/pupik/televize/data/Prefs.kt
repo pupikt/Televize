@@ -62,6 +62,11 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("linkPaired", false)
         set(v) = p.edit().putBoolean("linkPaired", v).apply()
 
+    /** Spárování ovladače přes PIN (Sony „Normální“ ověřování) – cookie auth=… */
+    var irccCookie: String
+        get() = p.getString("irccCookie", "")!!
+        set(v) = p.edit().putString("irccCookie", v).apply()
+
     var weatherCache: String?
         get() = p.getString("wcache", null)
         set(v) = p.edit().putString("wcache", v).apply()

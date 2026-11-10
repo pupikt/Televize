@@ -294,6 +294,7 @@ class NightService : AccessibilityService() {
             .put("psk", prefs.psk.isNotBlank())
             .put("irccInfo", irccInfo ?: JSONObject.NULL)
             .put("irccWhy", irccWhy ?: JSONObject.NULL)
+            .put("irccPair", irccPair ?: if (prefs.irccCookie.isNotBlank()) "ok" else JSONObject.NULL)
             .put("ip", Bravia.hosts().firstOrNull { it != "127.0.0.1" } ?: JSONObject.NULL)
             .put("ircc", ircc ?: if (prefs.psk.isBlank()) "nopsk" else JSONObject.NULL)
     }
@@ -302,18 +303,38 @@ class NightService : AccessibilityService() {
     @Volatile var ircc: String? = null
     @Volatile var irccInfo: String? = null
     @Volatile var irccWhy: String? = null
+    @Volatile var irccPair: String? = null
 
     /** Příkaz z Domácnosti. Volá se z vlákna Link: tlačítka jdou rovnou odsud (síť), ostatní na hlavní vlákno. */
     fun runCommand(c: JSONObject) {
         when (c.optString("t")) {
+            "irccPair" -> {
+                // telka ukáže na obrazovce PIN
+                val (rc, ck) = Bravia.register(null, null)
+                if (rc == 200 && ck != null) { prefs.irccCookie = ck; irccPair = "ok"; ircc = null; irccWhy = null }
+                else irccPair = if (rc == 401) "pin" else "fail:$rc"
+                log("párování ovladače: $rc"); return
+            }
+            "irccPin" -> {
+                val (rc, ck) = Bravia.register(c.optString("v").trim(), null)
+                if (rc == 200 && ck != null) { prefs.irccCookie = ck; irccPair = "ok"; ircc = null; irccWhy = null; irccInfo = null }
+                else irccPair = if (rc == 401) "badpin" else "fail:$rc"
+                log("PIN ovladače: $rc"); return
+            }
             "psk" -> { prefs.psk = c.optString("v"); ircc = null; irccInfo = null; irccWhy = null; log("klíč IP control uložen z Domácnosti"); return }
             "key" -> {
                 val k = c.optString("k")
                 if (k == "back") { h.post { performGlobalAction(GLOBAL_ACTION_BACK) }; return }
                 if (k == "home") { h.post { goHome() }; return }
                 val psk = prefs.psk
-                if (psk.isBlank()) { ircc = "nopsk"; return }
-                val r = Bravia.key(psk, k)
+                if (psk.isBlank() && prefs.irccCookie.isBlank()) { ircc = "nopsk"; return }
+                var r = Bravia.key(psk, k, prefs.irccCookie)
+                if (r.code == 403 && prefs.irccCookie.isNotBlank()) {
+                    // cookie vypršela (platí cca 2 týdny) → obnovit bez PINu a zkusit znovu
+                    val (rc, ck) = Bravia.register(null, prefs.irccCookie)
+                    if (rc == 200 && ck != null) { prefs.irccCookie = ck; r = Bravia.key(psk, k, ck) }
+                    else { prefs.irccCookie = ""; irccPair = null }
+                }
                 ircc = if (r.code == 200) "ok" else "fail"
                 irccInfo = if (r.code == 200) null else r.detail
                 irccWhy = if (r.code == 200) null else r.why
