@@ -40,6 +40,8 @@ Paměť projektu. Přečti celé na začátku práce a po větší změně sem p
 - `night/Link.kt`: vlákno ve službě, když je telka zapnutá, každé ~3 s `POST /api/tv/sync` s hlavičkou `X-TV-Key` (náhodný token v `Prefs.linkToken`; server zná jen SHA-256). Pošle `NightService.snapshot()`, příkazy provede `NightService.runCommand` (vypnout, Domů, spustit appku, jas, usínání, hlasitost přes `AudioManager.STREAM_MUSIC`, ztlumit, pauza = mediální klávesa).
 - Spárování: Nastavení → Domácnost → „Propojit s Domácností“ → `POST /api/tv/hello {code, h}` → 6místný kód na obrazovce → Tom ho napíše v Domácnosti → další sync vrátí 200 = propojeno. 401 po spárování = Domácnost telku odpojila.
 - Funguje jen se zapnutou službou usnadnění. Zapnout telku z mobilu nejde.
+- **Ovladač z mobilu** (10. 11. 2026): příkaz `key` – `back` = `GLOBAL_ACTION_BACK`, `home` = `goHome()`, ostatní (šipky, OK, menu, play…) = `Bravia.key` → IRCC `http://127.0.0.1/sony/IRCC` (SOAP, hlavička `X-Auth-PSK` = `Prefs.psk`). Klíč jde nastavit v Nastavení Televize nebo poslat z Domácnosti (příkaz `psk`). Výsledek posledního tlačítka ve stavu `ircc` (ok / nopsk / fail). Tlačítka se provádějí rovnou ve vlákně Link (síť), ostatní příkazy na hlavním vlákně.
+- **Rychlý režim**: když sync vrátí `fast: true` (v mobilu je otevřená stránka Televize), další dotaz za 250 ms, jinak 3 s.
 
 ## Instalace u Toma
 1. Na telce z Obchodu Play appka **Downloader** (AFTVnews).

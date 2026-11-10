@@ -291,10 +291,33 @@ class NightService : AccessibilityService() {
             .put("muted", muted)
             .put("apps", apps)
             .put("ver", cz.pupik.televize.BuildConfig.VERSION_CODE)
+            .put("psk", prefs.psk.isNotBlank())
+            .put("ircc", ircc ?: if (prefs.psk.isBlank()) "nopsk" else JSONObject.NULL)
     }
 
-    /** Příkaz z Domácnosti (z vlákna Link → provede se na hlavním vlákně). */
-    fun runCommand(c: JSONObject) = h.post {
+    /** Jak dopadlo poslední tlačítko přes IP control: ok / nopsk / fail. */
+    @Volatile var ircc: String? = null
+
+    /** Příkaz z Domácnosti. Volá se z vlákna Link: tlačítka jdou rovnou odsud (síť), ostatní na hlavní vlákno. */
+    fun runCommand(c: JSONObject) {
+        when (c.optString("t")) {
+            "psk" -> { prefs.psk = c.optString("v"); ircc = null; log("klíč IP control uložen z Domácnosti"); return }
+            "key" -> {
+                val k = c.optString("k")
+                if (k == "back") { h.post { performGlobalAction(GLOBAL_ACTION_BACK) }; return }
+                if (k == "home") { h.post { goHome() }; return }
+                val psk = prefs.psk
+                if (psk.isBlank()) { ircc = "nopsk"; return }
+                val r = Bravia.key(psk, k)
+                ircc = if (r == 200) "ok" else "fail"
+                if (r != 200) log("tlačítko $k: IP control vrátil $r")
+                return
+            }
+        }
+        h.post { runOnMain(c) }
+    }
+
+    private fun runOnMain(c: JSONObject) {
         val t = c.optString("t")
         prefs.log("z Domácnosti: $t")
         val am = getSystemService(AUDIO_SERVICE) as AudioManager

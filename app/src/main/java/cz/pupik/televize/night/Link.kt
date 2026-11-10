@@ -95,12 +95,14 @@ object Link {
         if (code != 200) { state.value = state.value.copy(ok = false, error = "Domácnost hlásí chybu $code"); return 10_000 }
         if (!prefs.linkPaired) { prefs.linkPaired = true; prefs.linkCode = null; s.log("propojeno s Domácností") }
         state.value = LinkState(paired = true, ok = true)
-        val cmds = runCatching { JSONObject(body).optJSONArray("cmds") }.getOrNull() ?: JSONArray()
+        val o = runCatching { JSONObject(body) }.getOrNull() ?: JSONObject()
+        val cmds = o.optJSONArray("cmds") ?: JSONArray()
         for (i in 0 until cmds.length()) {
             val c = cmds.optJSONObject(i) ?: continue
             s.runCommand(c)
         }
-        return if (cmds.length() > 0) 1500 else 3000
+        // v mobilu je otevřená stránka Televize → ptát se skoro pořád, ať ovladač reaguje hned
+        return if (o.optBoolean("fast")) 250 else if (cmds.length() > 0) 1000 else 3000
     }
 
     private fun post(path: String, json: String, token: String?): Pair<Int, String> {
