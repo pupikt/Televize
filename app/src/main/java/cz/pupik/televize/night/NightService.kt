@@ -126,6 +126,7 @@ class NightService : AccessibilityService() {
         h.removeCallbacksAndMessages(null)
         runCatching { veil?.let { wm.removeView(it) } }
         runCatching { badge?.let { wm.removeView(it) } }
+        runCatching { toastView?.let { wm.removeView(it) } }
         state.value = Night()
         super.onDestroy()
     }
@@ -265,6 +266,76 @@ class NightService : AccessibilityService() {
         h.postDelayed(hideBadge, 1800)
     }
 
+    // ---------- oznámení z Domácnosti (pračka doprala…) ----------
+    private val toasts = ArrayDeque<Triple<String, String, String>>()
+    private var toastView: android.widget.LinearLayout? = null
+
+    fun toast(kind: String, title: String, body: String) {
+        toasts.addLast(Triple(kind, title, body))
+        if (toastView == null) nextToast()
+    }
+
+    private fun nextToast() {
+        val (kind, title, body) = toasts.removeFirstOrNull() ?: return
+        val px = resources.displayMetrics.density
+        val icon = when {
+            kind.startsWith("wm") -> "🧺"
+            kind.startsWith("vac") -> "🤖"
+            kind.startsWith("ac") -> "💧"
+            kind.startsWith("kotel") -> "🔥"
+            kind == "cold_away" -> "❄️"
+            else -> "🏠"
+        }
+        val card = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding((18 * px).toInt(), (14 * px).toInt(), (24 * px).toInt(), (14 * px).toInt())
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.argb(238, 30, 36, 64), Color.argb(238, 13, 16, 30))).apply {
+                cornerRadius = 26 * px
+                setStroke((1.2f * px).toInt(), Color.argb(120, 255, 255, 255))
+            }
+            elevation = 16 * px
+            alpha = 0f
+            translationX = 60 * px
+        }
+        val ic = TextView(this).apply {
+            text = icon
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.argb(60, 129, 140, 248)) }
+            val sz = (48 * px).toInt()
+            layoutParams = android.widget.LinearLayout.LayoutParams(sz, sz)
+        }
+        val texts = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((14 * px).toInt(), 0, 0, 0)
+            addView(TextView(this@NightService).apply {
+                text = title; setTextColor(Color.WHITE); setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD; maxLines = 1
+            })
+            if (body.isNotBlank()) addView(TextView(this@NightService).apply {
+                text = body; setTextColor(Color.argb(200, 230, 234, 255)); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                maxLines = 2; maxWidth = (420 * px).toInt()
+            })
+        }
+        card.addView(ic); card.addView(texts)
+        val lp = overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = (36 * px).toInt(); y = (30 * px).toInt()
+        }
+        if (runCatching { wm.addView(card, lp) }.isFailure) { toastView = null; return }
+        toastView = card
+        card.animate().alpha(1f).translationX(0f).setDuration(420).setInterpolator(android.view.animation.OvershootInterpolator(0.8f)).start()
+        h.postDelayed({
+            card.animate().alpha(0f).translationX(40 * px).setDuration(380).withEndAction {
+                runCatching { wm.removeView(card) }
+                toastView = null
+                nextToast()
+            }.start()
+        }, 8000)
+        prefs.log("na obrazovce: $title")
+    }
+
     private val hideBadge = Runnable { badge?.animate()?.alpha(0f)?.setDuration(400)?.start() }
 
     // ---------- Domácnost ----------
@@ -368,6 +439,8 @@ class NightService : AccessibilityService() {
                 }
                 "level" -> { startSleep(0); setLevel(c.optDouble("v", 1.0).toFloat()) }
                 "sleep" -> startSleep(c.optInt("min", 0))
+                "goodnight" -> { startSleep(0); setLevel(0.2f); startSleep(60); showBadge("☾  Dobrou noc · usnu za 60 min") }
+                "toast" -> toast(c.optString("kind"), c.optString("title"), c.optString("body"))
                 "vol" -> {
                     val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                     am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(c.optDouble("v", 0.0) / 100.0 * max).toInt(), AudioManager.FLAG_SHOW_UI)

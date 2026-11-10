@@ -44,6 +44,11 @@ Paměť projektu. Přečti celé na začátku práce a po větší změně sem p
 - Ve stavu se posílá i `ip` = adresa telky v domácí síti (pro zapínání přes Zkratky v iPhonu – viz CLAUDE.md Domácnosti).
 - **Spárování ovladače přes PIN** (10. 11. 2026): IRCC s předsdíleným klíčem vracel u Toma 403 (klíč přitom sedí – getPowerStatus prošel), proto `Bravia.register`: `/sony/accessControl` actRegister (clientid `televize-domacnost:1`, level private) bez PINu → telka ukáže PIN → příkaz `irccPin` → znovu s `Authorization: Basic :PIN` → cookie `auth=…` (`Prefs.irccCookie`), posílá se v IRCC jako `Cookie`. Při 403 se cookie zkusí obnovit bez PINu, jinak se smaže. Stav `irccPair`: pin / badpin / ok / fail:N. **Ověřeno 10. 11. 2026 – po spárování PINem ovladač z Domácnosti funguje.**
 - **Zapínání** (10. 11. 2026): předsdílený klíč Tomova telka nebere vůbec (setPowerStatus i po restartu 403, getPowerStatus prošel jen proto, že je veřejný – „klíč sedí“ byl omyl). Proto telka posílá ve stavu `cookie` ze spárování PINem; Domácnost ji dává zkratce v iPhonu (viz CLAUDE.md Domácnosti). Cookie se obnovuje každé 3 dny ve `snapshot()` přes `Bravia.register(null, cookie)` (že obnova bez PINu funguje, je neověřené).
+- **Dalších 4 nápady (10. 11. 2026 večer, Tom vybral 1, 2, 3, 5)**:
+  - **Oznámení na telce**: Domácnost (`notifyTick` → `tvToast`) pošle příkaz `toast {kind, title, body}`, jen když telka běží; `NightService.toast` = skleněná karta vpravo nahoře (emoji podle druhu: 🧺 pračka, 🤖 vysavač, 💧 klima, 🔥 kotel, ❄️ zima), 8 s, víc najednou za sebou. Čidla a propojení se na telku neposílají.
+  - **Dobrou noc** (jen v ovladači v Domácnosti, ne jinde): příkaz `goodnight` → jas 20 % + usínání 60 min + ukazatel „☾ Dobrou noc“.
+  - **Pruh „Doma“** na hlavní obrazovce pod počasím (`HouseStrip`): teploty 2 místností + co běží (bez telky), `Link.house` → `POST /api/tv/dum` (X-TV-Key) = stejný souhrn jako widget (mezipaměť 4 min), každé 2 min, jen když je telka propojená. Dlaždice posunuté níž (top 92 dp).
+  - (5 = telka ve widgetu – jen na straně Domácnosti.)
 - **Rychlý režim**: když sync vrátí `fast: true` (v mobilu je otevřená stránka Televize), další dotaz za 250 ms, jinak 3 s.
 
 ## Instalace u Toma

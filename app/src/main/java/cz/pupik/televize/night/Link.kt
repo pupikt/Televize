@@ -118,6 +118,14 @@ object Link {
         return code to body
     }
 
+    /** Souhrn domácnosti (teploty, co běží) pro hlavní obrazovku – volá se z UI, ne z hlavního vlákna. */
+    fun house(ctx: Context): JSONObject? {
+        val token = Prefs(ctx).linkToken
+        if (token.isBlank()) return null
+        val (code, body) = runCatching { post("/api/tv/dum", "{}", token) }.getOrNull() ?: return null
+        return if (code == 200) runCatching { JSONObject(body) }.getOrNull() else null
+    }
+
     private fun sha(t: String) = MessageDigest.getInstance("SHA-256").digest(t.toByteArray()).joinToString("") { "%02x".format(it) }
 
     /** Hlasitost v % (Sony: STREAM_MUSIC = reproduktory telky). */

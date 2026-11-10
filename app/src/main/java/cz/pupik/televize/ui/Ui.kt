@@ -24,6 +24,10 @@ import kotlinx.coroutines.withContext
 
 enum class Screen { Home, All, Settings }
 
+/** Souhrn z Domácnosti pro hlavní obrazovku. */
+class House(val rooms: List<Room>, val running: List<String>)
+class Room(val name: String, val temp: Double?, val hum: Double?)
+
 /** Stav celé obrazovky. */
 class Ui(private val ctx: Context, private val scope: CoroutineScope) {
     val prefs = Prefs(ctx)
@@ -51,6 +55,8 @@ class Ui(private val ctx: Context, private val scope: CoroutineScope) {
     var accOn by mutableStateOf(false)
     var takeHome by mutableStateOf(prefs.takeHome)
     var aurora by mutableStateOf(prefs.aurora)
+
+    var house by mutableStateOf<House?>(null)
 
     var update by mutableStateOf<Release?>(null)
     var updating by mutableStateOf<Float?>(null)
@@ -129,6 +135,27 @@ class Ui(private val ctx: Context, private val scope: CoroutineScope) {
 
     fun openTvSettings() {
         runCatching { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    // ---------- Domácnost ----------
+    suspend fun loadHouse() {
+        val o = withContext(Dispatchers.IO) { cz.pupik.televize.night.Link.house(ctx) } ?: return
+        val rooms = o.optJSONArray("rooms")?.let { a ->
+            (0 until a.length()).mapNotNull { i ->
+                val r = a.optJSONObject(i) ?: return@mapNotNull null
+                Room(
+                    r.optString("name").replace(Regex("^(o[bv]ývací)\\s*pokoj$", RegexOption.IGNORE_CASE), "Obývák"),
+                    if (r.isNull("temp")) null else r.optDouble("temp"),
+                    if (r.isNull("hum")) null else r.optDouble("hum"),
+                )
+            }
+        } ?: emptyList()
+        // co běží – kromě telky samotné (na tu se právě díváš)
+        val running = o.optJSONArray("devices")?.let { a ->
+            (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.takeIf { it.optBoolean("on") }?.optString("text") }
+                .filter { !it.startsWith("Telka") }
+        } ?: emptyList()
+        house = House(rooms.take(2), running.take(2))
     }
 
     // ---------- aktualizace ----------

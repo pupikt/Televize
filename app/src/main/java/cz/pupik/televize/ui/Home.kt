@@ -34,6 +34,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -78,6 +79,12 @@ fun HomeScreen(ui: Ui) {
         while (true) { now = Date(); delay(60_000 - System.currentTimeMillis() % 60_000 + 50) }
     }
     val hour = Calendar.getInstance().apply { time = now }.get(Calendar.HOUR_OF_DAY)
+    // teploty a co běží doma – každé 2 minuty (jen když je telka propojená s Domácností)
+    val link by cz.pupik.televize.night.Link.state.collectAsState()
+    LaunchedEffect(link.paired) {
+        if (!link.paired && !previewMode) return@LaunchedEffect
+        while (true) { runCatching { ui.loadHouse() }; delay(120_000) }
+    }
 
     // klidový režim: po chvíli nečinnosti zůstanou jen hodiny, počasí a záře
     val awake by animateFloatAsState(if (ui.idle) 0f else 1f, tween(1400, easing = FastOutSlowInEasing), label = "idle")
@@ -104,11 +111,17 @@ fun HomeScreen(ui: Ui) {
                 )
             }
             Spacer(Modifier.weight(1f))
-            Box(Modifier.enter(90)) { WeatherCard(ui) }
+            Column(horizontalAlignment = Alignment.End) {
+                Box(Modifier.enter(90)) { WeatherCard(ui) }
+                ui.house?.let { hs ->
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.enter(160)) { HouseStrip(hs) }
+                }
+            }
         }
 
         // ---- oblíbené aplikace ----
-        Column(Modifier.align(Alignment.CenterStart).padding(top = 64.dp).graphicsLayer { alpha = awake }) {
+        Column(Modifier.align(Alignment.CenterStart).padding(top = 92.dp).graphicsLayer { alpha = awake }) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                 contentPadding = PaddingValues(horizontal = 52.dp, vertical = 28.dp),
@@ -328,6 +341,26 @@ fun Chip(label: String, selected: Boolean, mod: Modifier = Modifier, onClick: ()
             contentAlignment = Alignment.Center,
         ) {
             BasicText(label, style = ts(16.sp, if (selected || f) 800 else 600, if (f) INK else C.text))
+        }
+    }
+}
+
+/** Pruh „Doma“ pod počasím: teploty místností a co zrovna běží (z Domácnosti). */
+@Composable
+private fun HouseStrip(h: House) {
+    Row(Modifier.glass(pill()).padding(horizontal = 20.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        LineIcon("home", 18.dp, Color(0xFF7DD3FC))
+        h.rooms.forEach { r ->
+            Spacer(Modifier.width(14.dp))
+            BasicText(r.name, style = ts(14.sp, 600, C.dim))
+            Spacer(Modifier.width(6.dp))
+            BasicText(r.temp?.let { "%.1f°".format(Locale("cs"), it) } ?: "–", style = ts(16.sp, 800))
+        }
+        h.running.forEach { t ->
+            Spacer(Modifier.width(14.dp))
+            Box(Modifier.size(6.dp).background(Color(0xFF4ADE80), pill()))
+            Spacer(Modifier.width(7.dp))
+            BasicText(t, style = ts(14.sp, 700, Color(0xFFBAE6FD)), maxLines = 1)
         }
     }
 }
